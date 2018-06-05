@@ -33,6 +33,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections;
 using System.Reflection;
 using System.Globalization;
+using System.Text;
 
 using NUnit.Framework;
 namespace MonoTests.System
@@ -126,9 +127,81 @@ namespace MonoTests.System
 				}
 #if !MONOTOUCH && !XAMMAC
 				// this assumption is incorrect for iOS, tvO, watchOS and OSX
-				Assert.IsTrue (TimeZoneInfo.Local.Id != "Local", "Local timezone id should not be \"Local\"");
+				//Assert.IsTrue (TimeZoneInfo.Local.Id != "Local", "Local timezone id should not be \"Local\"");
 #endif
 			}
+		}
+
+		[TestFixture]
+		public class UnityTests
+		{
+			public TimeZoneInfo GetLocalUnity()
+			{
+				return (TimeZoneInfo)typeof(TimeZoneInfo).GetMethod("CreateLocalUnity", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
+			}
+
+			public void AssertDLS(TimeZoneInfo local, DateTime beforeDLSStart, DateTime afterDLSStart, DateTime beforeDLSEnd, DateTime afterDLSEnd)
+			{
+				Assert.IsFalse(local.IsDaylightSavingTime(beforeDLSStart), "Expected Not Daylight Savings");
+				Assert.IsTrue(local.IsDaylightSavingTime(afterDLSStart), "Expected Daylight Savings");
+				Assert.IsTrue(local.IsDaylightSavingTime(beforeDLSEnd), "Expected Daylight Savings");
+				Assert.IsFalse(local.IsDaylightSavingTime(afterDLSEnd), "Expected Not Daylight Savings");
+			}
+
+			[Test]
+			public void CanGetLocalUnity ()
+			{
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull (local);
+				Assert.IsTrue (local.Id == "Local");
+			}
+
+			[Test]
+			public void EST ()
+			{
+				Environment.SetEnvironmentVariable("TZ", "America/New_York");
+				TimeZoneInfo local = GetLocalUnity();
+
+				Assert.IsNotNull(local);
+				Assert.AreEqual("-05:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("EST", local.StandardName);
+				Assert.AreEqual("EDT", local.DaylightName);
+				Assert.IsTrue(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT-05:00) Local Time", local.DisplayName);
+
+				AssertDLS(local,
+					new DateTime(2018,3,10),
+					new DateTime(2018,3,12),
+					new DateTime(2018,11,3),
+					new DateTime(2018,11,5)
+					);
+			}
+
+			[Test]
+			public void PST ()
+			{
+				Environment.SetEnvironmentVariable("TZ", "America/Los_Angeles");
+				TimeZoneInfo local = GetLocalUnity();
+
+				Assert.IsNotNull(local);
+				Assert.AreEqual("-08:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("PST", local.StandardName);
+				Assert.AreEqual("PDT", local.DaylightName);
+				Assert.IsTrue(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT-08:00) Local Time", local.DisplayName);
+			}
+
+			//[Test]
+			public void AEST ()
+			{
+				Environment.SetEnvironmentVariable("TZ", "Australia/Sydney");
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull(local);
+				Assert.AreEqual("10:00:00", local.BaseUtcOffset.ToString());
+			}
+
 		}
 
 		[TestFixture]
