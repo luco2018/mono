@@ -33,7 +33,6 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections;
 using System.Reflection;
 using System.Globalization;
-using System.Text;
 
 using NUnit.Framework;
 namespace MonoTests.System
@@ -140,12 +139,29 @@ namespace MonoTests.System
 				return (TimeZoneInfo)typeof(TimeZoneInfo).GetMethod("CreateLocalUnity", BindingFlags.NonPublic | BindingFlags.Static).Invoke(null, null);
 			}
 
+			public void AssertNoDLS(TimeZoneInfo local, DateTime beforeDLSStart, DateTime afterDLSStart, DateTime beforeDLSEnd, DateTime afterDLSEnd)
+			{
+				Assert.IsFalse(local.IsDaylightSavingTime(beforeDLSStart), "Expected Not Daylight Savings");
+				Assert.IsFalse(local.IsDaylightSavingTime(afterDLSStart), "Expected Not Daylight Savings");
+				Assert.IsFalse(local.IsDaylightSavingTime(beforeDLSEnd), "Expected Not Daylight Savings");
+				Assert.IsFalse(local.IsDaylightSavingTime(afterDLSEnd), "Expected Not Daylight Savings");
+			}
+
 			public void AssertDLS(TimeZoneInfo local, DateTime beforeDLSStart, DateTime afterDLSStart, DateTime beforeDLSEnd, DateTime afterDLSEnd)
 			{
 				Assert.IsFalse(local.IsDaylightSavingTime(beforeDLSStart), "Expected Not Daylight Savings");
 				Assert.IsTrue(local.IsDaylightSavingTime(afterDLSStart), "Expected Daylight Savings");
 				Assert.IsTrue(local.IsDaylightSavingTime(beforeDLSEnd), "Expected Daylight Savings");
 				Assert.IsFalse(local.IsDaylightSavingTime(afterDLSEnd), "Expected Not Daylight Savings");
+			}
+
+			//Similar to Above but for Timezones that begin in daylight savings time jan 1
+			public void AssertDLSInverse(TimeZoneInfo local, DateTime beforeDLSEnd, DateTime afterDLSEnd, DateTime beforeDLSStart, DateTime afterDLSStart)
+			{
+				Assert.IsFalse(local.IsDaylightSavingTime(beforeDLSEnd), "Expected Daylight Savings");
+				Assert.IsTrue(local.IsDaylightSavingTime(afterDLSEnd), "Expected Not Daylight Savings");
+				Assert.IsTrue(local.IsDaylightSavingTime(beforeDLSStart), "Expected Not Daylight Savings");
+				Assert.IsFalse(local.IsDaylightSavingTime(afterDLSStart), "Expected Daylight Savings");
 			}
 
 			[Test]
@@ -170,11 +186,44 @@ namespace MonoTests.System
 				Assert.IsTrue(local.SupportsDaylightSavingTime);
 				Assert.AreEqual("(GMT-05:00) Local Time", local.DisplayName);
 
+				//Before DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(1970,4,25),
+					new DateTime(1970,4,27),
+					new DateTime(1970,10,24),
+					new DateTime(1970,10,26)
+					);
+
+				//First DLS Supported Year
+				AssertDLS(local,
+					new DateTime(1971,4,24),
+					new DateTime(1971,4,26),
+					new DateTime(1971,10,30),
+					new DateTime(1971,11,1)
+					);
+
+				//Near current year
 				AssertDLS(local,
 					new DateTime(2018,3,10),
 					new DateTime(2018,3,12),
 					new DateTime(2018,11,3),
 					new DateTime(2018,11,5)
+					);
+
+				//Last DLS Supported Year
+				AssertDLS(local,
+					new DateTime(2037,3,7),
+					new DateTime(2037,3,9),
+					new DateTime(2037,10,30),
+					new DateTime(2037,11,2)
+					);
+
+				//After Last DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(2038,2,1),
+					new DateTime(2038,5,1),
+					new DateTime(2038,6,1),
+					new DateTime(2038,12,1)
 					);
 			}
 
@@ -191,15 +240,189 @@ namespace MonoTests.System
 				Assert.AreEqual("PDT", local.DaylightName);
 				Assert.IsTrue(local.SupportsDaylightSavingTime);
 				Assert.AreEqual("(GMT-08:00) Local Time", local.DisplayName);
+
+				//Before DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(1970,4,25),
+					new DateTime(1970,4,27),
+					new DateTime(1970,10,24),
+					new DateTime(1970,10,26)
+					);
+
+				//First DLS Supported Year
+				AssertDLS(local,
+					new DateTime(1971,4,24),
+					new DateTime(1971,4,26),
+					new DateTime(1971,10,30),
+					new DateTime(1971,11,1)
+					);
+
+				//Near current year
+				AssertDLS(local,
+					new DateTime(2018,3,10),
+					new DateTime(2018,3,12),
+					new DateTime(2018,11,3),
+					new DateTime(2018,11,5)
+					);
+
+				//Last DLS Supported Year
+				AssertDLS(local,
+					new DateTime(2037,3,7),
+					new DateTime(2037,3,9),
+					new DateTime(2037,10,30),
+					new DateTime(2037,11,2)
+					);
+
+				//After Last DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(2038,2,1),
+					new DateTime(2038,5,1),
+					new DateTime(2038,6,1),
+					new DateTime(2038,12,1)
+					);
 			}
 
-			//[Test]
+			[Test]
+			public void MST_Arizona ()
+			{
+				//Arizona is special in that there hasn't been daylight savings since 1967 (before our first supported year)
+				Environment.SetEnvironmentVariable("TZ", "America/Phoenix");
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull(local);
+				Assert.AreEqual("-07:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("MST", local.StandardName);
+				Assert.AreEqual("", local.DaylightName);
+				Assert.IsFalse(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT-07:00) Local Time", local.DisplayName);
+			}
+
+			[Test]
+			public void EET_Egypt ()
+			{
+				//Egypt is special in that it stopped doing daylight savings in 2014 (after our first supported year)
+				Environment.SetEnvironmentVariable("TZ", "Egypt");
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull(local);
+				Assert.AreEqual("02:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("EET", local.StandardName);
+				Assert.AreEqual("", local.DaylightName);
+				Assert.IsFalse(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT+02:00) Local Time", local.DisplayName);
+
+				//unfortunately...we don't load any transition times for dates before 2014...we may consider fixing that..
+			}
+
+			[Test]
+			public void MSK_Crimea()
+			{
+				//Crimea is special, because they switched form EET(with dls) to MSK (without dls) due to world conflicts in 2014
+				//C# timezoneinfo class only supports a single utc offset and transition times only account for daylight savings changes.
+				//In this case, it will display MSK with no support for daylight savings
+				Environment.SetEnvironmentVariable("TZ", "Europe/Simferopol");
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull(local);
+				Assert.AreEqual("03:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("MSK", local.StandardName);
+				Assert.AreEqual("", local.DaylightName);
+				Assert.IsFalse(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT+03:00) Local Time", local.DisplayName);
+			}
+
+			[Test]
+			public void SA_Samoa()
+			{
+				//Samoa is special, switched form -10/-11 to +13/+14 in 2011...The Timezoneinfo class only supports a single base utcoffset so
+				//years before 2011 will not have daylight savings information
+				Environment.SetEnvironmentVariable("TZ", "Pacific/Apia");
+				TimeZoneInfo local = GetLocalUnity();
+				Assert.IsNotNull(local);
+				Assert.AreEqual("13:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("+13", local.StandardName);
+				Assert.AreEqual("+14", local.DaylightName);
+				Assert.IsTrue(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT+13:00) Local Time", local.DisplayName);
+
+				//2011 transitioned from utc -10 to utc +14...since we switched timezones in this year, we shouldn't have any DLS info for this year and prior
+				AssertNoDLS(local,
+					new DateTime(2011,4,1),
+					new DateTime(2011,4,3),
+					new DateTime(2011,12,28),
+					new DateTime(2011,12,31)
+					);
+				AssertNoDLS(local,
+					new DateTime(2010,9,24),
+					new DateTime(2010,9,26),
+					new DateTime(2010,12,28),
+					new DateTime(2010,12,31)
+					);
+
+				//Near current year
+				AssertDLSInverse(local,
+					new DateTime(2018,3,31),
+					new DateTime(2018,4,2),
+					new DateTime(2018,9,29),
+					new DateTime(2018,10,1)
+					);
+			}
+
+			[Test]
 			public void AEST ()
 			{
+				//Timezone that begins Jan 1 in DLS time
 				Environment.SetEnvironmentVariable("TZ", "Australia/Sydney");
 				TimeZoneInfo local = GetLocalUnity();
 				Assert.IsNotNull(local);
 				Assert.AreEqual("10:00:00", local.BaseUtcOffset.ToString());
+				Assert.AreEqual("Local", local.Id);
+				Assert.AreEqual("AEST", local.StandardName);
+				Assert.AreEqual("AEDT", local.DaylightName);
+				Assert.IsTrue(local.SupportsDaylightSavingTime);
+				Assert.AreEqual("(GMT+10:00) Local Time", local.DisplayName);
+
+				//Before DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(1970,4,25),
+					new DateTime(1970,4,27),
+					new DateTime(1970,10,24),
+					new DateTime(1970,10,26)
+					);
+
+				//First DLS Supported Year...Austrialia did not start DLS until oct of 71
+				AssertDLS(local,
+					new DateTime(1971,10,30),
+					new DateTime(1971,11,1),
+					new DateTime(1972,2,26),
+					new DateTime(1972,2,28)
+					);
+
+				//Near current year
+				AssertDLSInverse(local,
+					new DateTime(2018,3,31),
+					new DateTime(2018,4,1),
+					new DateTime(2018,10,6),
+					new DateTime(2018,10,8)
+					);
+
+				//Last DLS Supported Year
+				AssertDLSInverse(local,
+					new DateTime(2037,4,4),
+					new DateTime(2037,4,6),
+					new DateTime(2037,10,3),
+					new DateTime(2037,10,4)
+					);
+
+				//After Last DLS Supported Year
+				AssertNoDLS(local,
+					new DateTime(2038,2,1),
+					new DateTime(2038,5,1),
+					new DateTime(2038,6,1),
+					new DateTime(2038,12,1)
+					);
+
 			}
 
 		}
